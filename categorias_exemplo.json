@@ -1,0 +1,42 @@
+{
+  "PIX Recebido": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Pix - Recebido"], "modo": "contem" }
+    ]
+  },
+  "PIX Enviado": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Pix - Enviado"], "modo": "contem" }
+    ]
+  },
+  "Pagamento de Boleto": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Pagamento de Boleto"], "modo": "contem" }
+    ]
+  },
+  "Compra com Cartão": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Compra com Cart"], "modo": "contem" }
+    ]
+  },
+  "Saque": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Saque"], "modo": "contem" }
+    ]
+  },
+  "Tarifa Bancária": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Tarifa"], "modo": "contem" }
+    ]
+  },
+  "Empresa X": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["EMPRESA X", "EMPRESA Y"], "modo": "contem" }
+    ]
+  },
+  "Plano de Saúde": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["PLANO DE SAUDE", "PLANO DE SAÚDE", "VIDA"], "modo": "contem" }
+    ]
+  }
+}

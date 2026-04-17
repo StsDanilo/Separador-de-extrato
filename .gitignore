@@ -1,0 +1,11 @@
+# Extratos reais — nunca subir dados pessoais
+ExtratoTeste.*
+ExtratoComFiltros.*
+Extrato_*.xlsx
+categorias.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
