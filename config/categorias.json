@@ -1,0 +1,117 @@
+{
+  "BB Rende Fácil": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["BB Rende Fácil", "Rende Facil", "Rende Fácil"], "modo": "contem" }
+    ]
+  },
+  "Supermercado Beira Rio": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["Beira Rio", "Manoel Luiz"], "modo": "contem" }
+    ]
+  },
+  "BRF SA": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["BRF SA", "BRF S A"], "modo": "contem" }
+    ]
+  },
+  "JP Santos": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["JPJS COMERCIO"], "modo": "contem" }
+    ]
+  },
+  "COMERCIO DE VERDURAS REZENDE": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["COMERCIO DE VERDURAS REZE"], "modo": "contem" }
+    ]
+  },
+  "COMERCIAL DE FRUTAS HORTI": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["COMERCIAL DE FRUTAS HORTI"], "modo": "contem" }
+    ]
+  },
+  "Seguros": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["segur", "ourocap", "ouro vida", "empresa flex", "OURO EMPRESARIAL"], "modo": "contem" }
+    ]
+  },
+  "Energia e Água": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["energisa", "IGUA"], "modo": "contem" }
+    ]
+  },
+  "REFRESCOS GUARARAPES": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["REFRESCOS GUARARAPES LTDA"], "modo": "contem" }
+    ]
+  },
+  "ARMAZENS MARTINS": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["ARMAZENS MARTINS"], "modo": "contem" }
+    ]
+  },
+  "CRBS S A": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["CRBS S A", "CRBS SA"], "modo": "contem" }
+    ]
+  },
+  "Boleto Devolvido": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Boleto devolvido", "devolvido"], "modo": "contem" }
+    ]
+  },
+  "Depósito de Cheque": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["cheque", "CHQ"], "modo": "contem" }
+    ]
+  },
+  "Saque": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Saque"], "modo": "contem" }
+    ]
+  },
+  "Telefone Pré-Pago": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Telefone Pre-Pago", "Telefone Pré-Pago"], "modo": "contem" }
+    ]
+  },
+  "Tarifa Bancária": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Tarifa"], "modo": "contem" }
+    ]
+  },
+  "PORTOSEG": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["PORTOSEG"], "modo": "contem" }
+    ]
+  },
+  "UNIMED": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["UNIMED"], "modo": "contem" }
+    ]
+  },
+  "Impostos": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["ARRECADACAO", "PREF", "DARF", "darf", "CEF"], "modo": "contem" }
+    ]
+  },
+  "PIX": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Pix", "PIX"], "modo": "contem" }
+    ]
+  },
+  "Pagamento de Boleto": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Pagamento de Boleto", "Boleto"], "modo": "contem" }
+    ]
+  },
+  "Compra com Cartão": {
+    "condicoes": [
+      { "campo": "lancamento", "termos": ["Compra com Cart"], "modo": "contem" }
+    ]
+  },
+  "Telefônica / VIVO": {
+    "condicoes": [
+      { "campo": "detalhes", "termos": ["TELEFONICA", "VIVO"], "modo": "contem" }
+    ]
+  }
+}
