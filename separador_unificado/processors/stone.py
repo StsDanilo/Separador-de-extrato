@@ -58,27 +58,31 @@ DISPLAY_HEADERS = {
 }
 
 OUTPUT_ORDER = [
-    "data",
-    "movimentacao",
-    "tipo",
-    "valor",
-    "tarifa",
-    "situacao",
     "destino",
-    "destino_documento",
-    "destino_instituicao",
-    "origem",
-    "origem_documento",
-    "origem_instituicao",
-    "saldo_antes",
+    "data",
+    "valor",
     "saldo_depois",
 ]
+
+ALIGN_CENTER_FIELDS = {"data"}
+ALIGN_RIGHT_FIELDS = {"valor", "saldo_antes", "saldo_depois"}
+
+FIELD_WIDTHS = {
+    "data": 17,
+    "movimentacao": 15,
+    "valor": 14,
+    "destino": 32,
+    "origem": 32,
+    "saldo_antes": 16,
+    "saldo_depois": 16,
+}
 
 FILL_DIA_A = PatternFill("solid", fgColor="FFFFFF")
 FILL_DIA_B = PatternFill("solid", fgColor="EFEFEF")
 FILL_HEADER = PatternFill("solid", fgColor="FFFFFF")
 FILL_GROUP = PatternFill("solid", fgColor="F2F4F7")
 FILL_SECTION = PatternFill("solid", fgColor="E6EAEE")
+FILL_INFO = PatternFill("solid", fgColor="F7F9FB")
 
 
 def sem_acento(texto) -> str:
@@ -203,6 +207,10 @@ def output_headers(col_map: dict[str, int]) -> list[str]:
     return headers
 
 
+def output_fields(col_map: dict[str, int]) -> list[str]:
+    return [field for field in OUTPUT_ORDER if field in col_map]
+
+
 def output_row(row: list, col_map: dict[str, int]) -> list:
     values = []
     for field in OUTPUT_ORDER:
@@ -233,7 +241,60 @@ def classify_row(row: list, col_map: dict[str, int]) -> str:
     return "Outros"
 
 
-def split_rows(rows: list[list], header_idx: int, col_map: dict[str, int]):
+def parse_data_stone(value) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip() if value is not None else ""
+    if not text:
+        return None
+    for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def ordenar_cronologicamente(rows: list[list], header_idx: int, col_map: dict[str, int]) -> list[list]:
+    data_rows = [row for row in rows[header_idx + 1 :] if not row_is_empty(row)]
+    if not data_rows:
+        return data_rows
+
+    data_idx = col_map.get("data")
+    if data_idx is None:
+        return data_rows
+
+    primeira_data = parse_data_stone(data_rows[0][data_idx] if data_idx < len(data_rows[0]) else None)
+    ultima_data = parse_data_stone(data_rows[-1][data_idx] if data_idx < len(data_rows[-1]) else None)
+    if primeira_data is not None and ultima_data is not None and primeira_data > ultima_data:
+        return list(reversed(data_rows))
+
+    return data_rows
+
+
+def compute_balance_summary(
+    data_rows: list[list], col_map: dict[str, int]
+) -> tuple[str | None, str | None]:
+    saldo_antes_idx = col_map.get("saldo_antes")
+    saldo_depois_idx = col_map.get("saldo_depois")
+    if saldo_antes_idx is None or saldo_depois_idx is None or not data_rows:
+        return None, None
+
+    primeiro_lancamento = data_rows[0]
+    ultimo_lancamento = data_rows[-1]
+
+    saldo_inicial = None
+    if saldo_antes_idx < len(primeiro_lancamento):
+        saldo_inicial = normalizar_valor(primeiro_lancamento[saldo_antes_idx]) or None
+
+    saldo_final = None
+    if saldo_depois_idx < len(ultimo_lancamento):
+        saldo_final = normalizar_valor(ultimo_lancamento[saldo_depois_idx]) or None
+
+    return saldo_inicial, saldo_final
+
+
+def split_rows(data_rows: list[list], col_map: dict[str, int]):
     groups = {
         "Resgate da Reserva Stone": [],
         "Créditos comuns": [],
@@ -242,9 +303,7 @@ def split_rows(rows: list[list], header_idx: int, col_map: dict[str, int]):
         "Outros": [],
     }
 
-    for row in rows[header_idx + 1 :]:
-        if row_is_empty(row):
-            continue
+    for row in data_rows:
         group = classify_row(row, col_map)
         groups[group].append(output_row(row, col_map))
 
@@ -295,17 +354,18 @@ def escrever_header_colunas(ws, row_idx: int, headers: list[str]):
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
-def escrever_linha(ws, row_idx: int, values: list, fill: PatternFill):
+def escrever_linha(ws, row_idx: int, values: list, fill: PatternFill, fields: list[str]):
     border = borda_fina()
     for col_idx, value in enumerate(values, start=1):
         cell = ws.cell(row=row_idx, column=col_idx, value=value)
         cell.fill = fill
         cell.border = border
         cell.font = Font(size=9)
-        if col_idx in (1, 2, 3, 5, 6):
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        elif col_idx == 4:
+        field = fields[col_idx - 1] if col_idx - 1 < len(fields) else None
+        if field in ALIGN_RIGHT_FIELDS:
             cell.alignment = Alignment(horizontal="right", vertical="center")
+        elif field in ALIGN_CENTER_FIELDS:
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         else:
             cell.alignment = Alignment(vertical="top", wrap_text=True)
 
@@ -318,7 +378,9 @@ def linha_em_branco(ws, row_idx: int, num_cols: int):
         cell.fill = PatternFill(fill_type=None)
 
 
-def escrever_grupo(ws, current_row: int, group_name: str, rows: list[list], headers: list[str], num_cols: int):
+def escrever_grupo(
+    ws, current_row: int, group_name: str, rows: list[list], headers: list[str], fields: list[str], num_cols: int
+):
     if not rows:
         return current_row
 
@@ -327,14 +389,19 @@ def escrever_grupo(ws, current_row: int, group_name: str, rows: list[list], head
     escrever_header_colunas(ws, current_row, headers)
     current_row += 1
 
+    data_col = fields.index("data") if "data" in fields else None
+
     current_day = None
     fill_toggle = False
     for values in rows:
-        day = str(values[0]).split(" ")[0] if values else ""
+        if data_col is not None and data_col < len(values):
+            day = str(values[data_col]).split(" ")[0]
+        else:
+            day = ""
         if day != current_day:
             current_day = day
             fill_toggle = not fill_toggle
-        escrever_linha(ws, current_row, values, FILL_DIA_A if fill_toggle else FILL_DIA_B)
+        escrever_linha(ws, current_row, values, FILL_DIA_A if fill_toggle else FILL_DIA_B, fields)
         current_row += 1
 
     return current_row
@@ -347,6 +414,7 @@ def escrever_secao(
     group_names: list[str],
     groups: dict[str, list[list]],
     headers: list[str],
+    fields: list[str],
     num_cols: int,
 ):
     escrever_header_secao(ws, current_row, title, num_cols)
@@ -360,32 +428,32 @@ def escrever_secao(
         if not first:
             linha_em_branco(ws, current_row, num_cols)
             current_row += 1
-        current_row = escrever_grupo(ws, current_row, group_name, rows, headers, num_cols)
+        current_row = escrever_grupo(ws, current_row, group_name, rows, headers, fields, num_cols)
         first = False
 
     return current_row
 
 
-def ajustar_colunas(ws, num_cols: int):
-    widths = {
-        1: 17,
-        2: 15,
-        3: 14,
-        4: 13,
-        5: 10,
-        6: 12,
-        7: 28,
-        8: 18,
-        9: 28,
-        10: 28,
-        11: 18,
-        12: 28,
-        13: 14,
-        14: 14,
-    }
+def escrever_linha_info(ws, row_idx: int, texto: str, num_cols: int):
+    ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=num_cols)
+    border = borda_fina()
     for col_idx in range(1, num_cols + 1):
+        cell = ws.cell(row=row_idx, column=col_idx)
+        cell.fill = FILL_INFO
+        cell.border = Border(top=border.top, bottom=border.bottom)
+    ws.cell(row=row_idx, column=1).border = Border(left=border.left, top=border.top, bottom=border.bottom)
+    ws.cell(row=row_idx, column=num_cols).border = Border(right=border.right, top=border.top, bottom=border.bottom)
+    master = ws.cell(row=row_idx, column=1)
+    master.value = texto
+    master.font = Font(bold=True, size=11)
+    master.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[row_idx].height = 20
+
+
+def ajustar_colunas(ws, fields: list[str]):
+    for col_idx, field in enumerate(fields, start=1):
         letter = get_column_letter(col_idx)
-        ws.column_dimensions[letter].width = widths.get(col_idx, 16)
+        ws.column_dimensions[letter].width = FIELD_WIDTHS.get(field, 16)
 
 
 def default_output_path(input_path: Path, output_dir: Path | None = None) -> Path:
@@ -401,15 +469,34 @@ def process_file(input_path: str | Path, output_dir: str | Path | None = None) -
 
     rows = load_rows(input_path)
     header_idx, col_map = identify_header(rows)
-    groups = split_rows(rows, header_idx, col_map)
+    data_rows = ordenar_cronologicamente(rows, header_idx, col_map)
+    groups = split_rows(data_rows, col_map)
     headers = output_headers(col_map)
+    fields = output_fields(col_map)
     num_cols = len(headers)
+    saldo_inicial, saldo_final = compute_balance_summary(data_rows, col_map)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Extrato Stone"
 
     current_row = 1
+    if saldo_inicial is not None:
+        escrever_linha_info(
+            ws, current_row, f"Saldo antes do primeiro lançamento do mês: {saldo_inicial}", num_cols
+        )
+        current_row += 1
+    if saldo_final is not None:
+        escrever_linha_info(
+            ws, current_row, f"Saldo final após o último lançamento do mês: {saldo_final}", num_cols
+        )
+        current_row += 1
+    if saldo_inicial is not None or saldo_final is not None:
+        linha_em_branco(ws, current_row, num_cols)
+        current_row += 1
+
+    freeze_row = current_row + 2
+
     current_row = escrever_secao(
         ws,
         current_row,
@@ -417,6 +504,7 @@ def process_file(input_path: str | Path, output_dir: str | Path | None = None) -
         ["Resgate da Reserva Stone", "Créditos comuns"],
         groups,
         headers,
+        fields,
         num_cols,
     )
 
@@ -432,16 +520,19 @@ def process_file(input_path: str | Path, output_dir: str | Path | None = None) -
         ["Aplicação na Reserva Stone", "Débitos comuns"],
         groups,
         headers,
+        fields,
         num_cols,
     )
 
     if groups["Outros"]:
         linha_em_branco(ws, current_row, num_cols)
         current_row += 1
-        current_row = escrever_secao(ws, current_row, "OUTROS", ["Outros"], groups, headers, num_cols)
+        current_row = escrever_secao(
+            ws, current_row, "OUTROS", ["Outros"], groups, headers, fields, num_cols
+        )
 
-    ajustar_colunas(ws, num_cols)
-    ws.freeze_panes = "A3"
+    ajustar_colunas(ws, fields)
+    ws.freeze_panes = f"A{freeze_row}"
 
     output_root = Path(output_dir) if output_dir else None
     output_path = default_output_path(input_path, output_root)
