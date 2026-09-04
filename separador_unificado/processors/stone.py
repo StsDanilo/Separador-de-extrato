@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
 from pathlib import Path
 
@@ -118,7 +119,11 @@ def eh_desconhecido(texto) -> bool:
 
 
 def _load_xlsx_rows(path: Path) -> list[list]:
-    wb = load_workbook(path, read_only=True, data_only=True)
+    # Não usar read_only=True: alguns extratos da Stone trazem a tag <dimension>
+    # do XML incorreta (ex.: "A1" em vez do intervalo real), e nesse modo o
+    # openpyxl confia nela para decidir até onde ler, cortando quase todo o
+    # arquivo. Carregar normalmente força a varredura das células reais.
+    wb = load_workbook(path, data_only=True)
     try:
         ws = wb.active
         return [list(row) for row in ws.iter_rows(values_only=True)]
@@ -167,9 +172,50 @@ def load_rows(path: str | Path) -> list[list]:
     raise ValueError("A Stone aceita arquivos .xlsx, .xlsm ou .xls.")
 
 
-def identify_header(rows: list[list]) -> tuple[int, dict[str, int]]:
+# Colunas indispensaveis para aplicar as regras de separacao da Stone
+# (resgate/aplicacao/comuns) e para o extrato fazer sentido. Sem qualquer uma
+# delas nao da para dividir os lancamentos com seguranca.
+CORE_HEADERS = ("movimentacao", "valor", "data", "destino", "origem")
+
+_ALL_KNOWN_ALIASES = {alias for aliases in HEADER_ALIASES.values() for alias in aliases}
+
+
+@dataclass
+class HeaderMatch:
+    header_idx: int
+    col_map: dict[str, int]
+    is_exact: bool
+    # campo -> texto da coluna usada quando o nome nao bateu com nenhum
+    # apelido conhecido, so uma aproximacao (ex.: "Conta Destino" para "destino")
+    fuzzy_matches: dict[str, str] = dataclass_field(default_factory=dict)
+    # nomes de exibicao das colunas essenciais que nao foram encontradas nem por aproximacao
+    missing: list[str] = dataclass_field(default_factory=list)
+
+
+def _fuzzy_match_column(field: str, row: list, used_cols: set[int]) -> tuple[int, str] | None:
+    """Procura, entre as colunas ainda nao usadas, alguma cujo rotulo contenha
+    a palavra do campo procurado (ex.: "Nome Destino" contem "destino")."""
+    keywords = HEADER_ALIASES.get(field, {field})
+    for col_idx, value in enumerate(row):
+        if col_idx in used_cols:
+            continue
+        label = normalizar_rotulo(value)
+        if not label:
+            continue
+        if label in _ALL_KNOWN_ALIASES:
+            # Rotulo bate exatamente com outro campo conhecido; nao e uma
+            # aproximacao do campo atual, e arriscar essa troca pode misturar
+            # colunas com significados diferentes (ex.: "Origem Documento").
+            continue
+        if any(word in keywords for word in label.split()):
+            return col_idx, str(value).strip()
+    return None
+
+
+def identify_header(rows: list[list]) -> HeaderMatch:
     best_row_idx = None
     best_map: dict[str, int] = {}
+    best_core_matches = -1
 
     for row_idx, row in enumerate(rows[:15]):
         col_map: dict[str, int] = {}
@@ -182,17 +228,45 @@ def identify_header(rows: list[list]) -> tuple[int, dict[str, int]]:
                     col_map[field] = col_idx
                     break
 
-        required = {"movimentacao", "valor", "data", "destino", "origem"}
-        if len(col_map) > len(best_map):
+        core_matches = sum(1 for field in CORE_HEADERS if field in col_map)
+        if core_matches == len(CORE_HEADERS):
+            return HeaderMatch(row_idx, col_map, is_exact=True)
+
+        is_better = core_matches > best_core_matches or (
+            core_matches == best_core_matches and len(col_map) > len(best_map)
+        )
+        if is_better:
             best_row_idx = row_idx
             best_map = col_map
-        if required.issubset(col_map):
-            return row_idx, col_map
+            best_core_matches = core_matches
 
-    if best_row_idx is not None and {"movimentacao", "valor", "destino", "origem"}.issubset(best_map):
-        return best_row_idx, best_map
+    if best_row_idx is None:
+        missing = [DISPLAY_HEADERS[field] for field in CORE_HEADERS]
+        return HeaderMatch(-1, {}, is_exact=False, missing=missing)
 
-    raise ValueError("Nao foi possivel identificar o cabecalho do extrato Stone.")
+    row = rows[best_row_idx]
+    used_cols = set(best_map.values())
+    fuzzy_matches: dict[str, str] = {}
+    for field in CORE_HEADERS:
+        if field in best_map:
+            continue
+        found = _fuzzy_match_column(field, row, used_cols)
+        if found is None:
+            continue
+        col_idx, label_text = found
+        best_map[field] = col_idx
+        used_cols.add(col_idx)
+        fuzzy_matches[field] = label_text
+
+    missing = [DISPLAY_HEADERS[field] for field in CORE_HEADERS if field not in best_map]
+    return HeaderMatch(best_row_idx, best_map, is_exact=False, fuzzy_matches=fuzzy_matches, missing=missing)
+
+
+def format_missing_columns_message(missing: list[str]) -> str:
+    if len(missing) == 1:
+        return f'Não foi possível separar os lançamentos da Stone: não encontrei a coluna "{missing[0]}" no extrato.'
+    colunas = ", ".join(f'"{nome}"' for nome in missing)
+    return f"Não foi possível separar os lançamentos da Stone: não encontrei as colunas {colunas} no extrato."
 
 
 def row_is_empty(row: list) -> bool:
@@ -225,16 +299,25 @@ def output_row(row: list, col_map: dict[str, int]) -> list:
 
 
 def classify_row(row: list, col_map: dict[str, int]) -> str:
-    movimento = row[col_map["movimentacao"]] if col_map["movimentacao"] < len(row) else ""
-    destino = row[col_map["destino"]] if col_map["destino"] < len(row) else ""
-    origem = row[col_map["origem"]] if col_map["origem"] < len(row) else ""
+    mov_idx = col_map.get("movimentacao")
+    if mov_idx is None:
+        # Sem a coluna Movimentacao nao ha como saber se e credito ou debito;
+        # o lancamento ainda entra na planilha, só que no bloco "Outros".
+        return "Outros"
 
+    movimento = row[mov_idx] if mov_idx < len(row) else ""
     movimento_norm = normalizar_movimentacao(movimento)
-    if movimento_norm == "credito" and eh_desconhecido(origem):
+
+    dest_idx = col_map.get("destino")
+    orig_idx = col_map.get("origem")
+    destino = row[dest_idx] if dest_idx is not None and dest_idx < len(row) else ""
+    origem = row[orig_idx] if orig_idx is not None and orig_idx < len(row) else ""
+
+    if movimento_norm == "credito" and orig_idx is not None and eh_desconhecido(origem):
         return "Resgate da Reserva Stone"
     if movimento_norm == "credito":
         return "Créditos comuns"
-    if movimento_norm == "debito" and eh_desconhecido(destino):
+    if movimento_norm == "debito" and dest_idx is not None and eh_desconhecido(destino):
         return "Aplicação na Reserva Stone"
     if movimento_norm == "debito":
         return "Débitos comuns"
@@ -462,13 +545,25 @@ def default_output_path(input_path: Path, output_dir: Path | None = None) -> Pat
     return (output_dir or input_path.parent) / filename
 
 
+def analyze_columns(input_path: str | Path) -> HeaderMatch:
+    """Verifica se o extrato tem as colunas necessárias para a separação,
+    sem gerar planilha nenhuma. Usado pela interface para decidir se pergunta
+    ou bloqueia antes de processar."""
+    input_path = Path(input_path)
+    rows = load_rows(input_path)
+    return identify_header(rows)
+
+
 def process_file(input_path: str | Path, output_dir: str | Path | None = None) -> ProcessResult:
     input_path = Path(input_path)
     if not input_path.exists():
         raise FileNotFoundError(f"Arquivo de entrada nao encontrado: {input_path}")
 
     rows = load_rows(input_path)
-    header_idx, col_map = identify_header(rows)
+    header_match = identify_header(rows)
+    if header_match.missing:
+        raise ValueError(format_missing_columns_message(header_match.missing))
+    header_idx, col_map = header_match.header_idx, header_match.col_map
     data_rows = ordenar_cronologicamente(rows, header_idx, col_map)
     groups = split_rows(data_rows, col_map)
     headers = output_headers(col_map)

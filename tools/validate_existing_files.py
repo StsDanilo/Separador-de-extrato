@@ -37,9 +37,13 @@ def source_files() -> list[Path]:
         for path in root.rglob("*"):
             if path.suffix.lower() in {".xlsx", ".xlsm"} and not is_generated_file(path):
                 files.append(path)
-    stone_file = WORKSPACE / "extratoStoneJulho.xlsx"
-    if stone_file.exists():
-        files.append(stone_file)
+    stone_files = [
+        WORKSPACE / "extratoStoneJulho.xlsx",
+        WORKSPACE / "ExtratoSTONEAGOSTO.xlsx",
+    ]
+    for stone_file in stone_files:
+        if stone_file.exists():
+            files.append(stone_file)
     return sorted(files, key=lambda item: str(item).lower())
 
 

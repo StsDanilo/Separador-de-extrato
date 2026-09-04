@@ -57,6 +57,16 @@ O extrato Stone é dividido em `CRÉDITOS` e `DÉBITOS`.
 
 A planilha gerada mantém apenas as colunas `Destino`, `Data`, `Valor` e `Saldo depois`, nessa ordem (as colunas `Movimentação`, `Tipo`, `Tarifa`, `Situação`, `Origem`, `Origem Documento`, `Origem Instituição`, `Destino Documento`, `Destino Instituição` e `Saldo antes` não entram na saída, embora `Movimentação`, `Destino` e `Origem` continuem sendo usadas internamente para classificar os lançamentos).
 
+### Robustez na leitura e identificação
+
+Alguns extratos da Stone saem do banco com a metadata interna do `.xlsx` incorreta (a tag `<dimension>` do XML declara um intervalo de células menor do que o real). Em modo de leitura otimizada (`read_only`) o `openpyxl` confia nessa metadata e acaba lendo só uma fração do arquivo — por isso a leitura de `.xlsx`/`.xlsm` (detecção de banco e processamento da Stone) é sempre feita em modo completo, que ignora essa metadata e varre as células de fato.
+
+A identificação das colunas essenciais (`Movimentação`, `Valor`, `Data`, `Destino`, `Origem`) segue três níveis:
+
+1. **Nome exato**: encontrado um dos nomes já conhecidos → processa direto, sem avisos.
+2. **Nome parecido** (ex.: o banco renomeia `Destino` para `Conta Destino`): a coluna é localizada por aproximação, mas a interface avisa "o formato do arquivo parece diferente do extrato Stone padrão, mas encontrei colunas equivalentes" e pede confirmação antes de continuar, listando qual coluna foi usada no lugar de qual.
+3. **Não encontrada de jeito nenhum**: se alguma dessas 5 colunas essenciais não for localizada (nem por aproximação), o processamento é recusado com um erro específico dizendo qual coluna faltou — nenhuma planilha é gerada, para não produzir uma separação incompleta ou enganosa (por exemplo, sem `Destino`/`Origem` não teria como distinguir resgate/aplicação da reserva de um lançamento comum).
+
 No topo da planilha é exibido um cabeçalho com o saldo antes do primeiro lançamento do mês e o saldo final após o último lançamento. Os lançamentos são sempre reordenados do mais antigo para o mais recente (começando pelo primeiro dia do mês), mesmo que o extrato original venha do Stone na ordem inversa.
 
 Arquivos Stone `.xlsx` e `.xlsm` são lidos com `openpyxl`. Arquivos `.xls` também são aceitos quando forem planilhas Excel antigas reais, usando `xlrd`. Se o banco entregar um `.xls` que na verdade é HTML renomeado, converta para `.xlsx` antes de processar.

@@ -404,8 +404,8 @@ class SeparadorApp(ctk.CTk):
         self.last_output_path: Path | None = None
 
         self.title(APP_NAME)
-        self.geometry("1020x680")
-        self.minsize(900, 620)
+        self.geometry("1020x620")
+        self.minsize(900, 480)
 
         self.bank_var = ctk.StringVar(value=self.settings.data.get("bank", BANK_BB))
         self.input_path_var = ctk.StringVar(value="")
@@ -450,9 +450,8 @@ class SeparadorApp(ctk.CTk):
         body.grid_columnconfigure(1, weight=1)
         body.grid_rowconfigure(0, weight=1)
 
-        controls = ctk.CTkFrame(body, width=430, corner_radius=8, fg_color="#FFFFFF")
+        controls = ctk.CTkScrollableFrame(body, width=430, corner_radius=8, fg_color="#FFFFFF")
         controls.grid(row=0, column=0, padx=(0, 14), sticky="nsew")
-        controls.grid_propagate(False)
         controls.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(controls, text="Processamento", font=ctk.CTkFont(size=17, weight="bold")).grid(
@@ -752,6 +751,31 @@ class SeparadorApp(ctk.CTk):
                 return messagebox.askyesno(
                     "Categorias não encontradas",
                     "O arquivo de categorias não foi encontrado. O extrato será agrupado em Outros.\n\nContinuar?",
+                )
+
+        if selected_bank == BANK_STONE:
+            try:
+                header_match = stone.analyze_columns(input_path)
+            except Exception as exc:
+                messagebox.showerror("Erro ao ler o extrato", str(exc))
+                return False
+
+            if header_match.missing:
+                messagebox.showerror(
+                    "Não é possível separar os lançamentos",
+                    stone.format_missing_columns_message(header_match.missing),
+                )
+                return False
+
+            if not header_match.is_exact:
+                detalhes = "\n".join(
+                    f'- {stone.DISPLAY_HEADERS.get(campo, campo)}: usei a coluna "{valor}"'
+                    for campo, valor in header_match.fuzzy_matches.items()
+                )
+                return messagebox.askyesno(
+                    "Formato diferente do esperado",
+                    "O formato do arquivo parece diferente do extrato Stone padrão, mas encontrei colunas "
+                    f"equivalentes:\n\n{detalhes}\n\nDeseja continuar mesmo assim?",
                 )
 
         return True

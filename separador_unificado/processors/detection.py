@@ -38,7 +38,11 @@ def detect_bank(path: str | Path) -> str | None:
         return _detect_legacy_xls(workbook_path)
 
     try:
-        wb = load_workbook(workbook_path, read_only=True, data_only=True)
+        # Não usar read_only=True: alguns extratos trazem a tag <dimension> do
+        # XML incorreta (ex.: "A1" em vez do intervalo real das células), e
+        # nesse modo o openpyxl confia nela para decidir até onde ler,
+        # cortando quase todo o arquivo antes mesmo de chegar ao cabeçalho.
+        wb = load_workbook(workbook_path, data_only=True)
     except Exception:
         return None
 
