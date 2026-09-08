@@ -9,3 +9,5 @@ dist/
 output/
 test_output/
 validation_output/
+
+.idea/

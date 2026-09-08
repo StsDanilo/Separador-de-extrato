@@ -379,7 +379,7 @@ def linha_em_branco(ws, row_idx, num_cols):
         cell.border = Border()
 
 
-def escrever_bloco(ws, current_row, titulo, grupos, headers, num_cols):
+def escrever_bloco(ws, current_row, titulo, grupos, headers, num_cols, sufixo_categoria=""):
     escrever_header_bloco(ws, current_row, titulo, num_cols)
     current_row += 1
 
@@ -393,7 +393,8 @@ def escrever_bloco(ws, current_row, titulo, grupos, headers, num_cols):
             linha_em_branco(ws, current_row, num_cols)
             current_row += 1
 
-        escrever_header_categoria(ws, current_row, nome_cat, num_cols)
+        nome_exibido = f"{nome_cat}{sufixo_categoria}" if sufixo_categoria else nome_cat
+        escrever_header_categoria(ws, current_row, nome_exibido, num_cols)
         current_row += 1
 
         escrever_header_colunas(ws, current_row, headers)
@@ -445,7 +446,9 @@ def gerar_extrato(
     current_row += 1
 
     grupos_entrada = agrupar_por_categoria(entradas, categorias)
-    current_row = escrever_bloco(ws, current_row, "ENTRADAS", grupos_entrada, headers, num_cols)
+    current_row = escrever_bloco(
+        ws, current_row, "ENTRADAS", grupos_entrada, headers, num_cols, sufixo_categoria="-E"
+    )
 
     linha_em_branco(ws, current_row, num_cols)
     current_row += 1
@@ -453,7 +456,7 @@ def gerar_extrato(
     current_row += 1
 
     grupos_saida = agrupar_por_categoria(saidas, categorias)
-    escrever_bloco(ws, current_row, "SAÍDAS", grupos_saida, headers, num_cols)
+    escrever_bloco(ws, current_row, "SAÍDAS", grupos_saida, headers, num_cols, sufixo_categoria="-D")
 
     larguras_fixas = {
         1: 11,
